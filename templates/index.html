@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alloy Composition Optimization</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0a0e1a;
+      --card:    #151d2e;
+      --border:  rgba(255,255,255,0.07);
+      --gold:    #f5a623;
+      --gold2:   #e8832a;
+      --cyan:    #38bdf8;
+      --text:    #e8eaf0;
+      --muted:   #8892a4;
+      --green:   #34d399;
+      --red:     #f87171;
+      --radius:  14px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 10% 0%,   rgba(245,166,35,0.08)  0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 90% 100%, rgba(56,189,248,0.07)  0%, transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none; z-index: 0;
+    }
+
+    .wrap {
+      position: relative; z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* HEADER */
+    header { padding: 56px 0 44px; text-align: center; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: rgba(245,166,35,0.1);
+      border: 1px solid rgba(245,166,35,0.25);
+      color: var(--gold);
+      font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 100px; margin-bottom: 22px;
+    }
+    .badge::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--gold); animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50%      { opacity:0.4; transform:scale(0.7); }
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(30px, 5.5vw, 50px);
+      font-weight: 800; line-height: 1.1; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 0%, var(--gold) 42%, var(--cyan) 82%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    .subtitle {
+      margin: 14px auto 0; max-width: 480px;
+      color: var(--muted); font-size: 14px; font-weight: 300; line-height: 1.75;
+    }
+
+    /* CARD */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 30px;
+      margin-bottom: 18px;
+      animation: fadeUp 0.45s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(16px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .section-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 6px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    .hint { font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.65; }
+
+    /* PROPERTY ROW */
+    .prop-row {
+      display: grid;
+      grid-template-columns: 30px 1fr 150px;
+      align-items: center;
+      gap: 14px;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--border);
+      transition: opacity 0.25s;
+    }
+    .prop-row:last-child { border-bottom: none; }
+    .prop-row.disabled   { opacity: 0.32; }
+
+    .toggle { position: relative; width: 28px; height: 15px; flex-shrink: 0; }
+    .toggle input { opacity:0; width:0; height:0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.1); border-radius: 100px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: ''; position: absolute;
+      width: 11px; height: 11px; left: 2px; top: 2px;
+      background: #fff; border-radius: 50%; transition: transform 0.2s;
+    }
+    .toggle input:checked + .slider              { background: var(--gold); }
+    .toggle input:checked + .slider::before      { transform: translateX(13px); }
+
+    .prop-info   { display: flex; flex-direction: column; gap: 2px; }
+    .prop-name   { font-family:'Syne',sans-serif; font-size:13px; font-weight:600; }
+    .prop-unit   { font-size: 11px; color: var(--muted); }
+
+    .prop-input-wrap input {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 14px;
+      padding: 9px 12px; outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .prop-input-wrap input:focus {
+      border-color: var(--gold); background: rgba(245,166,35,0.05);
+    }
+    .prop-input-wrap input:disabled { cursor: not-allowed; opacity: 0.35; }
+    .prop-input-wrap input::placeholder { color: rgba(136,146,164,0.45); }
+
+    /* BUTTON */
+    .btn-predict {
+      width: 100%; margin-top: 24px; padding: 15px;
+      border: none; border-radius: 10px;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold2) 55%, #b85c30 100%);
+      color: #fff; font-family: 'Syne', sans-serif; font-size: 15px;
+      font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      cursor: pointer; position: relative; overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 24px rgba(245,166,35,0.22);
+    }
+    .btn-predict:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(245,166,35,0.32); }
+    .btn-predict:active { transform: translateY(0); }
+    .btn-predict:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .btn-predict .sh {
+      position: absolute; top:0; left:-100%; width:55%; height:100%;
+      background: linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
+      animation: sh 2.6s infinite;
+    }
+    @keyframes sh { 0%{left:-100%} 100%{left:210%} }
+
+    /* ERROR BOX */
+    .error-box {
+      display: none;
+      margin-top: 16px;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.3);
+      color: var(--red);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* LOADING */
+    .loading { display:none; text-align:center; padding:36px; color:var(--muted); font-size:13px; }
+    .spinner {
+      width:34px; height:34px; margin:0 auto 14px;
+      border: 2px solid rgba(245,166,35,0.15); border-top-color:var(--gold);
+      border-radius:50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* RESULTS */
+    #results { display:none; }
+
+    .results-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+    }
+    .results-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; }
+    .top-badge {
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      color: #fff; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 4px 11px; border-radius: 100px;
+    }
+
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      gap: 10px; margin-bottom: 22px;
+    }
+    .elem-chip {
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 10px; text-align: center;
+      transition: border-color 0.2s, transform 0.2s;
+      animation: popIn 0.35s ease both;
+    }
+    .elem-chip:hover { border-color: rgba(245,166,35,0.4); transform: translateY(-2px); }
+    @keyframes popIn { from{opacity:0;transform:scale(0.82)} to{opacity:1;transform:scale(1)} }
+    .elem-symbol {
+      font-family:'Syne',sans-serif; font-size:20px; font-weight:800;
+      background: linear-gradient(135deg, var(--gold), var(--cyan));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    }
+    .elem-wt   { font-size:12px; color:var(--text); margin-top:3px; font-weight:500; }
+    .elem-role { font-size:10px; color:var(--muted); margin-top:2px; }
+
+    .input-summary {
+      font-size: 12px; color: var(--muted); line-height: 1.9;
+      border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px;
+    }
+    .input-summary b { color: var(--text); }
+
+    /* SIMILAR MATCHES */
+    .matches-label {
+      font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+      letter-spacing:0.13em; text-transform:uppercase; color:var(--muted);
+      margin-bottom:14px; display:flex; align-items:center; gap:10px;
+    }
+    .matches-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    .match-wrap {
+      border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 9px; overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+    }
+    .match-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 13px 16px; cursor: pointer;
+      transition: background 0.18s;
+    }
+    .match-row:hover { background: rgba(255,255,255,0.03); }
+    .match-rank {
+      font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
+      color:var(--muted); width:24px; text-align:center; flex-shrink:0;
+    }
+    .match-info  { flex: 1; min-width:0; }
+    .match-name  { font-family:'Syne',sans-serif; font-size:13px; font-weight:600; }
+    .match-props { font-size:11px; color:var(--muted); margin-top:3px; }
+
+    .match-pct  { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; }
+    .pct-val    { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; }
+    .pct-bar-bg { width:68px; height:3px; background:rgba(255,255,255,0.08); border-radius:100px; overflow:hidden; }
+    .pct-bar    { height:100%; border-radius:100px; transition: width 0.85s ease; }
+
+    .pct-high { color:var(--green); } .bar-high { background:var(--green); }
+    .pct-mid  { color:var(--gold);  } .bar-mid  { background:var(--gold);  }
+    .pct-low  { color:var(--red);   } .bar-low  { background:var(--red);   }
+
+    .match-detail {
+      display: none; padding: 10px 16px 14px 54px;
+      font-size: 12px; color: var(--muted); line-height: 1.9;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.15);
+    }
+    .match-detail b { color: var(--text); }
+
+    footer {
+      text-align:center; color:rgba(136,146,164,0.35);
+      font-size:11px; padding-top:24px; letter-spacing:0.04em;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge">ML-Powered · Copper Alloys</div>
+    <h1>Alloy Composition<br>Optimization</h1>
+    <p class="subtitle">Enter your target mechanical and electrical properties — the model will predict the optimal copper alloy composition.</p>
+  </header>
+
+  <div class="card">
+    <div class="section-label">Target Properties</div>
+    <p class="hint">Toggle on only the properties you want to specify. Disabled ones will use dataset average values internally.</p>
+
+    <div class="prop-row" id="row-hardness">
+      <label class="toggle"><input type="checkbox" id="tog-hardness" onchange="toggleProp('hardness')" checked><span class="slider"></span></label>
+      <div class="prop-info"><span class="prop-name">Hardness</span><span class="prop-unit">Vickers — HV</span></div>
+      <div class="prop-input-wrap"><input type="number" id="val-hardness" placeholder="e.g. 250" min="0"></div>
+    </div>
+
+    <div class="prop-row" id="row-conductivity">
+      <label class="toggle"><input type="checkbox" id="tog-conductivity" onchange="toggleProp('conductivity')" checked><span class="slider"></span></label>
+      <div class="prop-info"><span class="prop-name">Electrical Conductivity</span><span class="prop-unit">% IACS</span></div>
+      <div class="prop-input-wrap"><input type="number" id="val-conductivity" placeholder="e.g. 45" min="0"></div>
+    </div>
+
+    <div class="prop-row" id="row-tensile">
+      <label class="toggle"><input type="checkbox" id="tog-tensile" onchange="toggleProp('tensile')" checked><span class="slider"></span></label>
+      <div class="prop-info"><span class="prop-name">Tensile Strength</span><span class="prop-unit">Ultimate — MPa</span></div>
+      <div class="prop-input-wrap"><input type="number" id="val-tensile" placeholder="e.g. 700" min="0"></div>
+    </div>
+
+    <div class="prop-row" id="row-yield">
+      <label class="toggle"><input type="checkbox" id="tog-yield" onchange="toggleProp('yield')" checked><span class="slider"></span></label>
+      <div class="prop-info"><span class="prop-name">Yield Strength</span><span class="prop-unit">MPa</span></div>
+      <div class="prop-input-wrap"><input type="number" id="val-yield" placeholder="e.g. 500" min="0"></div>
+    </div>
+
+    <button class="btn-predict" id="predict-btn" onclick="runPredict()">
+      <span class="sh"></span>Predict Composition
+    </button>
+
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    Running model prediction…
+  </div>
+
+  <div id="results">
+
+    <div class="card">
+      <div class="results-header">
+        <span class="results-title">Predicted Composition</span>
+        <span class="top-badge">ML Result</span>
+      </div>
+      <div class="comp-grid" id="comp-grid"></div>
+      <div class="input-summary" id="input-summary"></div>
+    </div>
+
+    <div class="card">
+      <div class="matches-label">Similar Known Alloys</div>
+      <div id="matches-list"></div>
+    </div>
+
+  </div>
+
+  <footer>Cu Alloy Composition Optimizer &nbsp;·&nbsp; Random Forest ML Model</footer>
+</div>
+
+<script>
+  // ── toggle ────────────────────────────────────────────────────────────────
+  function toggleProp(id) {
+    const on    = document.getElementById('tog-' + id).checked;
+    const input = document.getElementById('val-' + id);
+    const row   = document.getElementById('row-' + id);
+    input.disabled = !on;
+    row.classList.toggle('disabled', !on);
+    if (!on) input.value = '';
+  }
+
+  // ── reference alloys for "similar matches" section ────────────────────────
+  const DB = [
+    { f:"Cu-1.8Ni-0.45Si-0.1Cr", c:{Cu:97.55,Ni:1.8,Si:0.45,Cr:0.1,Mg:0.05}, h:280, e:42, t:720,  y:560,  cls:"Cu-Ni-Si" },
+    { f:"Cu-2.2Ni-0.5Si-0.2Cr",  c:{Cu:97.0, Ni:2.2,Si:0.5, Cr:0.2,Zr:0.05}, h:310, e:38, t:780,  y:620,  cls:"Cu-Ni-Si" },
+    { f:"Cu-3Ni-0.65Si",          c:{Cu:96.2, Ni:3.0,Si:0.65,Mg:0.1},          h:260, e:35, t:680,  y:510,  cls:"Cu-Ni-Si" },
+    { f:"Cu-0.3Cr-0.1Zr",         c:{Cu:99.6, Cr:0.3,Zr:0.1},                  h:130, e:82, t:420,  y:320,  cls:"Cu low alloyed" },
+    { f:"Cu-1.5Ni-0.3Si-0.5Cr",  c:{Cu:97.65,Ni:1.5,Si:0.3, Cr:0.5},          h:240, e:48, t:650,  y:490,  cls:"Cu-Ni-Si" },
+    { f:"Cu-4Ni-1Si",             c:{Cu:94.95,Ni:4.0,Si:1.0, Fe:0.05},          h:340, e:28, t:860,  y:720,  cls:"Cu-Ni-Si" },
+    { f:"Cu-2Ni-0.4Si-0.15Mg",   c:{Cu:97.3, Ni:2.0,Si:0.4, Mg:0.15,Cr:0.1},  h:270, e:44, t:700,  y:540,  cls:"Cu-Ni-Si" },
+    { f:"Cu-0.5Cr-0.08Zr",        c:{Cu:99.42,Cr:0.5,Zr:0.08},                 h:145, e:78, t:460,  y:370,  cls:"Cu low alloyed" },
+    { f:"Cu-1Ni-0.25Si",          c:{Cu:98.75,Ni:1.0,Si:0.25},                  h:200, e:55, t:580,  y:430,  cls:"Cu-Ni-Si" },
+    { f:"Cu-5Ni-1.2Si-0.3Mg",    c:{Cu:93.4, Ni:5.0,Si:1.2, Mg:0.3,Cr:0.05},  h:380, e:22, t:920,  y:800,  cls:"Cu-Ni-Si" },
+    { f:"Cu-0.1Ag-0.3Cr",         c:{Cu:99.6, Ag:0.1,Cr:0.3},                   h:110, e:88, t:380,  y:280,  cls:"Cu low alloyed" },
+    { f:"Cu-2Ti",                  c:{Cu:98.0, Ti:2.0},                           h:180, e:12, t:620,  y:480,  cls:"Cu-Ti" },
+    { f:"Cu-3Ti-0.2Co",            c:{Cu:96.8, Ti:3.0,Co:0.2},                   h:220, e:10, t:730,  y:580,  cls:"Cu-Ti" },
+    { f:"Cu-1.7Be-0.2Co",          c:{Cu:98.1, Be:1.7,Co:0.2},                   h:420, e:18, t:1300, y:1100, cls:"Cu-Be" },
+    { f:"Cu-6Ni-1.5Si",            c:{Cu:92.4, Ni:6.0,Si:1.5,Zr:0.05},          h:390, e:18, t:950,  y:830,  cls:"Cu-Ni-Si" },
+  ];
+
+  const RANGES = { h:400, e:93, t:1100, y:950 };
+
+  function scoreMatch(entry, inp) {
+    let wSum = 0, sSum = 0;
+    if (inp.h !== null) { const d = Math.abs(inp.h - entry.h)/RANGES.h; sSum += Math.max(0, 1-d*1.6); wSum++; }
+    if (inp.e !== null) { const d = Math.abs(inp.e - entry.e)/RANGES.e; sSum += Math.max(0, 1-d*1.6); wSum++; }
+    if (inp.t !== null) { const d = Math.abs(inp.t - entry.t)/RANGES.t; sSum += Math.max(0, 1-d*1.6); wSum++; }
+    if (inp.y !== null) { const d = Math.abs(inp.y - entry.y)/RANGES.y; sSum += Math.max(0, 1-d*1.6); wSum++; }
+    return wSum === 0 ? 0 : (sSum / wSum) * 100;
+  }
+
+  // ── main predict — calls Flask /predict ───────────────────────────────────
+  async function runPredict() {
+    const togH = document.getElementById('tog-hardness').checked;
+    const togE = document.getElementById('tog-conductivity').checked;
+    const togT = document.getElementById('tog-tensile').checked;
+    const togY = document.getElementById('tog-yield').checked;
+
+    const valH = document.getElementById('val-hardness').value.trim();
+    const valE = document.getElementById('val-conductivity').value.trim();
+    const valT = document.getElementById('val-tensile').value.trim();
+    const valY = document.getElementById('val-yield').value.trim();
+
+    // check at least one is on and filled
+    const atLeastOne = (togH && valH) || (togE && valE) || (togT && valT) || (togY && valY);
+    if (!atLeastOne) {
+      showError("Please enable at least one property and enter a value.");
+      return;
+    }
+
+    hideError();
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('loading').style.display  = 'block';
+    document.getElementById('predict-btn').disabled   = true;
+
+    // build request body — only include toggled-on properties
+    const body = {};
+    if (togH && valH) body.hardness         = parseFloat(valH);
+    if (togE && valE) body.conductivity     = parseFloat(valE);
+    if (togT && valT) body.tensile_strength = parseFloat(valT);
+    if (togY && valY) body.yield_strength   = parseFloat(valY);
+
+    // inputs object for match scoring
+    const inp = {
+      h: body.hardness         ?? null,
+      e: body.conductivity     ?? null,
+      t: body.tensile_strength ?? null,
+      y: body.yield_strength   ?? null,
+    };
+
+    try {
+      const response = await fetch("/predict", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error("Server error: " + err);
+      }
+
+      const composition = await response.json();
+
+      // score similar alloys from reference DB
+      const scored = DB.map(a => ({ ...a, sc: scoreMatch(a, inp) }))
+                       .sort((a,b) => b.sc - a.sc);
+
+      renderResults(composition, inp, scored);
+
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      showError("Could not connect to model. Make sure app.py is running.<br>Error: " + err.message);
+    }
+
+    document.getElementById('predict-btn').disabled = false;
+  }
+
+  // ── render results ────────────────────────────────────────────────────────
+  function renderResults(comp, inp, scored) {
+    document.getElementById('loading').style.display = 'none';
+
+    // composition chips
+    const grid = document.getElementById('comp-grid');
+    grid.innerHTML = '';
+
+    const sorted = Object.entries(comp)
+      .filter(([, v]) => v > 0.01)
+      .sort(([, a], [, b]) => b - a);
+
+    if (sorted.length === 0) {
+      grid.innerHTML = '<p style="color:var(--muted);font-size:13px;">No significant elements predicted.</p>';
+    }
+
+    sorted.forEach(([el, wt], i) => {
+      const chip = document.createElement('div');
+      chip.className = 'elem-chip';
+      chip.style.animationDelay = (i * 0.055) + 's';
+      const role = wt >= 90 ? 'Base metal' : wt >= 2 ? 'Major alloying' : 'Minor alloying';
+      chip.innerHTML =
+        `<div class="elem-symbol">${el}</div>
+         <div class="elem-wt">${wt.toFixed(2)} wt%</div>
+         <div class="elem-role">${role}</div>`;
+      grid.appendChild(chip);
+    });
+
+    // input summary
+    const parts = [];
+    if (inp.h !== null) parts.push(`Hardness: <b>${inp.h} HV</b>`);
+    if (inp.e !== null) parts.push(`Conductivity: <b>${inp.e} %IACS</b>`);
+    if (inp.t !== null) parts.push(`Tensile: <b>${inp.t} MPa</b>`);
+    if (inp.y !== null) parts.push(`Yield: <b>${inp.y} MPa</b>`);
+    document.getElementById('input-summary').innerHTML =
+      '<b>Input properties used:</b> ' + parts.join(' &nbsp;·&nbsp; ');
+
+    // similar matches
+    const list = document.getElementById('matches-list');
+    list.innerHTML = '';
+
+    scored.slice(0, 7).filter(m => m.sc > 3).forEach((m, i) => {
+      const pct = Math.round(m.sc);
+      const cls = pct >= 70 ? 'high' : pct >= 40 ? 'mid' : 'low';
+
+      const compLine = Object.entries(m.c)
+        .filter(([, v]) => v > 0.01)
+        .sort(([, a], [, b]) => b - a)
+        .map(([k, v]) => `${k}: ${v.toFixed(2)}`).join(' · ');
+
+      const diffs = [];
+      if (inp.h !== null) diffs.push(`HV: ${inp.h} → ${m.h} (Δ${Math.abs(inp.h - m.h)})`);
+      if (inp.e !== null) diffs.push(`Cond: ${inp.e} → ${m.e} (Δ${Math.abs(inp.e - m.e).toFixed(1)})`);
+      if (inp.t !== null) diffs.push(`UTS: ${inp.t} → ${m.t} (Δ${Math.abs(inp.t - m.t)})`);
+      if (inp.y !== null) diffs.push(`YS: ${inp.y} → ${m.y} (Δ${Math.abs(inp.y - m.y)})`);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'match-wrap';
+      wrap.style.animationDelay = (i * 0.07) + 's';
+
+      const row = document.createElement('div');
+      row.className = 'match-row';
+      row.innerHTML =
+        `<div class="match-rank">#${i + 1}</div>
+         <div class="match-info">
+           <div class="match-name">${m.f} &nbsp;<span style="font-size:10px;color:var(--muted)">▾ click to expand</span></div>
+           <div class="match-props">HV ${m.h} · ${m.e} %IACS · UTS ${m.t} MPa · YS ${m.y} MPa · ${m.cls}</div>
+         </div>
+         <div class="match-pct">
+           <span class="pct-val pct-${cls}">${pct}%</span>
+           <div class="pct-bar-bg"><div class="pct-bar bar-${cls}" style="width:${pct}%"></div></div>
+         </div>`;
+
+      const detail = document.createElement('div');
+      detail.className = 'match-detail';
+      detail.innerHTML =
+        `<b>Composition (wt%):</b> ${compLine}<br>
+         <b>Property deltas:</b> ${diffs.join(' &nbsp;|&nbsp; ')}`;
+
+      row.onclick = () => {
+        detail.style.display = detail.style.display === 'block' ? 'none' : 'block';
+      };
+
+      wrap.appendChild(row);
+      wrap.appendChild(detail);
+      list.appendChild(wrap);
+    });
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('error-box');
+    box.innerHTML = msg;
+    box.style.display = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('error-box').style.display = 'none';
+  }
+</script>
+</body>
+</html>
