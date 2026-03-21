@@ -2,6 +2,8 @@
 
 This project focuses on predicting the optimal alloy composition for now **copper-based alloys** based only on user-defined mechanical and electrical property requirements.
 
+## PS: pkl file is not there, i am trying to commit it ASAP as i am new to this so please cooperate.
+
 ## Overview
 
 The system uses machine learning models to recommend alloy compositions that best match desired target properties, including:
