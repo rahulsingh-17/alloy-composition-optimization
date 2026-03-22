@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 models = joblib.load("composition_models.pkl")
 
-# these are the 4 properties the model was trained on
+# required propersties on which model is going to train
 # order must match exactly what was used during training
 PROPERTY_ORDER = [
     "Hardness (HV)",
