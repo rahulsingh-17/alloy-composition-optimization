@@ -16,10 +16,7 @@ The system uses machine learning models to recommend alloy compositions that bes
 
 ## Models Used
 
-Two regression models are implemented and compared:
-
-- **Random Forest Regressor**  
-- **Gradient Boosting Regressor**  
+- **Random Forest Regressor** 
 
 These models are trained on a dataset of copper alloy compositions and their corresponding material properties.
 
