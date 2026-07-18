@@ -2,7 +2,7 @@
 
 This project focuses on predicting the optimal alloy composition for now **copper-based alloys** based only on user-defined mechanical and electrical property requirements.
 
-**Note:** I commit the py file which you can run in your notebook with given dataset, after running you'll have .pkl file.
+**Note:** I commit the .py file which you can run in your notebook with given dataset, after running you'll have .pkl file.
 
 ## Overview
 
@@ -85,4 +85,5 @@ Follow these steps to run the project on your system:
 
 7. Enter the required values and get the predicted optimized alloy composition.
 
-**Why .pkl file:** A .pkl (pickle) file helps in machine learning by saving a fully trained model to a file on your hard drive, allowing you to reload it later for instant predictions without needing to retrain it from scratch.
+## Why .pkl file?
+A .pkl (pickle) file helps in machine learning by saving a fully trained model to a file on your hard drive, allowing you to reload it later for instant predictions without needing to retrain it from scratch.
