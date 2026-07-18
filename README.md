@@ -2,7 +2,7 @@
 
 This project focuses on predicting the optimal alloy composition for now **copper-based alloys** based only on user-defined mechanical and electrical property requirements.
 
-## PS edit: I commit the py file which you can run in your notebook with given dataset, after running you'll have pkl file.
+**Note:** I commit the py file which you can run in your notebook with given dataset, after running you'll have pkl file.
 
 ## Overview
 
